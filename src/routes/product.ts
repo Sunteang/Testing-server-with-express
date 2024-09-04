@@ -1,36 +1,8 @@
-import express, { Express, Request, Response, NextFunction } from "express";
-import mongoose from "mongoose";
+import { Router, Request, Response, NextFunction } from "express";
+import Item from "../models/model";
 import * as yup from "yup";
 
-const app: Express = express();
-const port = 4000;
-
-// MongoDB connection URL
-const mongoUrl =
-  "mongodb+srv://sereysunteang:@cluster0.drkax.mongodb.net/ProductCatalog?retryWrites=true&w=majority";
-
-mongoose
-  .connect(mongoUrl)
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error("MongoDB connection error:", err));
-
-//Start server
-app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
-});
-
-// Global Middleware
-app.use(express.json());
-
-// Mongoose Schema and Model
-const itemSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  price: { type: Number, required: true },
-  category: { type: String, required: true },
-  stock: { type: Number, required: true },
-});
-
-const Item = mongoose.model("Products", itemSchema);
+const productRouter = Router();
 
 // Yup Validation Schema
 const itemValidationSchema = yup.object().shape({
@@ -51,12 +23,12 @@ const itemValidationSchema = yup.object().shape({
 const validateItem = (req: Request, res: Response, next: NextFunction) => {
   itemValidationSchema
     .validate(req.body, { abortEarly: false })
-    .then(() => next()) // Proceed to the next middleware if validation passes
+    .then(() => next())
     .catch((err) => res.status(400).json({ errors: err.errors }));
 };
 
 // GET all items
-app.get("/v1/items", async (req: Request, res: Response) => {
+productRouter.get("/", async (req: Request, res: Response) => {
   try {
     const items = await Item.find();
     res.json(items);
@@ -66,7 +38,7 @@ app.get("/v1/items", async (req: Request, res: Response) => {
 });
 
 // GET a single item by ID
-app.get("/v1/items/:id", async (req: Request, res: Response) => {
+productRouter.get("/:id", async (req: Request, res: Response) => {
   const id = req.params.id;
 
   try {
@@ -81,7 +53,7 @@ app.get("/v1/items/:id", async (req: Request, res: Response) => {
 });
 
 // POST create a new item
-app.post("/v1/items", validateItem, async (req: Request, res: Response) => {
+productRouter.post("/", validateItem, async (req: Request, res: Response) => {
   const { name, price, category, stock } = req.body;
 
   try {
@@ -94,7 +66,7 @@ app.post("/v1/items", validateItem, async (req: Request, res: Response) => {
 });
 
 // PUT update an existing item by ID
-app.put("/v1/items/:id", validateItem, async (req: Request, res: Response) => {
+productRouter.put("/:id", validateItem, async (req: Request, res: Response) => {
   const id = req.params.id;
   const { name, price, category, stock } = req.body;
 
@@ -114,3 +86,22 @@ app.put("/v1/items/:id", validateItem, async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Failed to update item" });
   }
 });
+
+// DELETE an item by ID
+productRouter.delete("/:id", async (req: Request, res: Response) => {
+  const id = req.params.id;
+
+  try {
+    const deletedItem = await Item.findByIdAndDelete(id);
+    if (!deletedItem) {
+      return res.status(404).json({ error: "Item not found" });
+    }
+    return res
+      .status(200)
+      .json({ message: "Item deleted successfully", item: deletedItem });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to delete item" });
+  }
+});
+
+export default productRouter;

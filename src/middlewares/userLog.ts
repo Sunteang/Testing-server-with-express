@@ -1,4 +1,3 @@
-// src/middleware.ts
 import { Request, Response, NextFunction } from "express";
 
 // Middleware function to log the request time
