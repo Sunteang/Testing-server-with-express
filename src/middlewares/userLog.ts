@@ -7,7 +7,6 @@ export const logRequestTime = (
   res: Response,
   next: NextFunction
 ) => {
-  
-  console.log(`Request received at: ${new Date().toISOString()}`);
+  console.log(`Request received at: ${new Date().toLocaleString()}`);
   next();
 };

@@ -1,122 +1,116 @@
-import express from "express";
+import express, { Express, Request, Response, NextFunction } from "express";
+import mongoose from "mongoose";
+import * as yup from "yup";
 
-const app = express();
+const app: Express = express();
 const port = 4000;
 
-// Start the server
+// MongoDB connection URL
+const mongoUrl =
+  "mongodb+srv://sereysunteang:pa$$word@cluster0.drkax.mongodb.net/Bookstore?retryWrites=true&w=majority";
+
+mongoose
+  .connect(mongoUrl)
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.error("MongoDB connection error:", err));
+
+//Start server
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
 
+// Global Middleware
 app.use(express.json());
 
-// Sample in-memory data
-let items = [
-  { id: 1, name: "Name 1", comment: "Comment 1" },
-  { id: 2, name: "Name 2", comment: "Comment 2" },
-  { id: 3, name: "Name 3", comment: "Comment 3" },
-];
+// Mongoose Schema and Model
+const itemSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  price: { type: Number, required: true },
+  category: { type: String, required: true },
+  stock: { type: Number, required: true },
+});
+
+const Item = mongoose.model("Products", itemSchema);
+
+// Yup Validation Schema
+const itemValidationSchema = yup.object().shape({
+  name: yup.string().required("Name is required"),
+  price: yup
+    .number()
+    .positive("Price must be positive")
+    .required("Price is required"),
+  category: yup.string().required("Category is required"),
+  stock: yup
+    .number()
+    .integer()
+    .positive("Stock must be a positive integer")
+    .required("Stock is required"),
+});
+
+// Middleware for validating input
+const validateItem = (req: Request, res: Response, next: NextFunction) => {
+  itemValidationSchema
+    .validate(req.body, { abortEarly: false })
+    .then(() => next()) // Proceed to the next middleware if validation passes
+    .catch((err) => res.status(400).json({ errors: err.errors }));
+};
 
 // GET all items
-app.get("/items", (req, res) => {
-  return res.json(items);
+app.get("/v1/items", async (req: Request, res: Response) => {
+  try {
+    const items = await Item.find();
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to retrieve items" });
+  }
 });
 
-// // GET a single item by ID
-// app.get("/items/:id", (req, res) => {
-//   const id = parseInt(req.params.id, 10);
+// GET a single item by ID
+app.get("/v1/items/:id", async (req: Request, res: Response) => {
+  const id = req.params.id;
 
-//   // Find the item with the matching id in the items array
-//   const item = items.find((item) => item.id === id);
-
-//   // If the item is not found, return 404
-//   if (!item) {
-//     return res.status(404).json({ error: "Item not found" });
-//   }
-
-//   // If the item is found, return it as JSON
-//   return res.json(item);
-// });
+  try {
+    const item = await Item.findById(id);
+    if (!item) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+    return res.status(200).json(item);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to retrieve item" });
+  }
+});
 
 // POST create a new item
-app.post("/items", (req, res) => {
-  const { name, comment } = req.body;
+app.post("/v1/items", validateItem, async (req: Request, res: Response) => {
+  const { name, price, category, stock } = req.body;
 
-  // Basic validation
-  if (!name || !comment) {
-    return res.status(400).json({ error: "Invalid input" });
+  try {
+    const newItem = new Item({ name, price, category, stock });
+    await newItem.save();
+    res.status(201).json(newItem);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to create item" });
   }
-
-  // Create a new item with a unique ID
-  const newItem = {
-    id: items.length > 0 ? items[items.length - 1].id + 1 : 1,
-    name,
-    comment,
-  };
-
-  // Add the new item to the items array
-  items.push(newItem);
-
-  // Return the newly created item
-  return res.status(201).json(newItem);
 });
-
-// // PUT update an existing item by ID
-// app.put("/items/:id", (req, res) => {
-//   const id = parseInt(req.params.id, 10);
-//   const { name, comment } = req.body;
-
-//   const item = items.find((item) => item.id === id);
-
-//   if (!item) {
-//     return res.status(404).json({ error: "Item not found" });
-//   }
-
-//   if (!name || !comment) {
-//     return res.status(400).json({ error: "Invalid input" });
-//   }
-
-//   item.name = name;
-//   item.comment = comment;
-
-//   // Return the updated item
-//   return res.json(item);
-// });
 
 // PUT update an existing item by ID
-app.put("/items/:id", (req, res) => {
-  const id = parseInt(req.params.id);
-  const { name, comment } = req.body;
+app.put("/v1/items/:id", validateItem, async (req: Request, res: Response) => {
+  const id = req.params.id;
+  const { name, price, category, stock } = req.body;
 
-  const item = items.find((item) => item.id === id);
-  console.log(item);
+  try {
+    const updatedItem = await Item.findByIdAndUpdate(
+      id,
+      { name, price, category, stock },
+      { new: true, runValidators: true }
+    );
 
-  if (!item) {
-    return res.status(404).json({ error: "Item not found" });
+    if (!updatedItem) {
+      return res.status(404).json({ error: "Item not found" });
+    }
+
+    return res.status(200).json(updatedItem);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to update item" });
   }
-
-  if (!name || !comment) {
-    return res.status(400).json({ error: "Invalid input" });
-  }
-
-  item.name = name;
-  item.comment = comment;
-
-  // Return the updated item
-  return res.status(200).json(item);
-});
-
-// DELETE an item by ID
-app.delete("/items/:id", (req, res) => {
-  const id = parseInt(req.params.id);
-  const itemIndex = items.findIndex((item) => item.id === id);
-
-  if (itemIndex === -1) {
-    return res.status(404).json({ error: "Item not found" });
-  }
-
-  // Remove the item from the array
-  const deletedItem = items.splice(itemIndex, 1)[0];
-
-  return res.json(deletedItem);
 });
