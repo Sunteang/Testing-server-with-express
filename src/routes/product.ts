@@ -21,7 +21,11 @@ const itemValidationSchema = yup.object().shape({
 });
 
 // Middleware for validating input
-const validateItem = (req: Request, res: Response, next: NextFunction) => {
+const validateItem = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   itemValidationSchema
     .validate(req.body, { abortEarly: false })
     .then(() => next())
@@ -34,7 +38,7 @@ productRouter.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 5;
+      const limit = parseInt(req.query.limit as string) || 10;
       const category = req.query.category as string;
       const sortBy = (req.query.sortBy as string) || "price";
       const sortOrder = req.query.order === "desc" ? -1 : 1;
@@ -44,17 +48,16 @@ productRouter.get(
 
       const items = await Item.find(filter)
         .sort({ [sortBy]: sortOrder })
-        .skip(skip)
+        .skip(page)
         .limit(limit);
       const totalItems = await Item.countDocuments(filter);
 
       res.status(200).json({
         items,
-        pagination: {
+        data: {
           totalItems,
           totalPages: Math.ceil(totalItems / limit),
           currentPage: page,
-          limit,
         },
       });
     } catch (err) {
